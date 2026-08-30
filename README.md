@@ -43,5 +43,5 @@ python -m src.data.labeling
 
 ## Author
 
-Yatharth | B.Tech CSE (Data Science), Navrachana University  
+Saksham Rai | UPES  
 Razorpay AI Buildathon 2026 — Track 2: AI Risk Manager
