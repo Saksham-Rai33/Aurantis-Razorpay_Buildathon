@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import lightgbm as lgb
 import json
+import joblib
 from pathlib import Path
 from sklearn.metrics import (
     average_precision_score,
@@ -37,6 +38,8 @@ def train_model(X_train, y_train):
     )
     model.fit(X_train, y_train)
     print("Training complete.")
+    joblib.dump(model, "results/model.pkl")
+    print("Model saved to results/model.pkl")
     return model
 
 

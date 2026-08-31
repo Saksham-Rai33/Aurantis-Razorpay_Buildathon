@@ -26,3 +26,4 @@ Thumbs.db
 
 
 .ipynb_checkpoints/
+results/model.pkl
