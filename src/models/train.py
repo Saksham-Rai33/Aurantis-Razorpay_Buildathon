@@ -3,6 +3,7 @@ import numpy as np
 import lightgbm as lgb
 import json
 import joblib
+from src.evaluation.cost_curve import run_cost_analysis
 from pathlib import Path
 from sklearn.metrics import (
     average_precision_score,
@@ -68,6 +69,8 @@ def evaluate_model(model, X_test, y_test):
         json.dump(metrics, f, indent=2)
     print("Metrics saved to results/metrics.json")
 
+    optimal = run_cost_analysis(np.array(y_test), y_prob)
+    metrics["optimal_threshold"] = optimal["threshold"]
     return metrics, y_prob
 
 
