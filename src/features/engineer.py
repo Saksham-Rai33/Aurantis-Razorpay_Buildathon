@@ -56,12 +56,16 @@ def run_pipeline(df):
 
 
 FEATURE_COLS = [
-    "amt_log", "amt_is_round", "amt_is_high",
-    "addr_mismatch",
-    "email_disposable", "email_mismatch",
-    "tod_hour", "is_night",
-    "card1_freq_log", "addr1_freq_log",
+    "amt_log",
+    "amt_is_high",
+    "card1_freq_log",
+    "addr1_freq_log",
     "TransactionAmt",
+    "C1", "C2", "C3", "C4", "C5",
+    "C6", "C7", "C8", "C9", "C10",
+    "D1", "D2", "D3", "D4", "D5",
+    "V1", "V2", "V3", "V4", "V5",
+    "V6", "V7", "V8", "V9", "V10",
 ]
 
 
