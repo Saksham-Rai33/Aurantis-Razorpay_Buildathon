@@ -1,6 +1,6 @@
 import streamlit as st
 
-from app.services import get_risk_tier
+from app.services import TIER_BADGE_CLASS, TIER_SCORE_CLASS, get_risk_tier
 
 orders = st.session_state.orders
 
@@ -39,9 +39,6 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
-
-TIER_BADGE_CLASS = {"low": "badge-green", "medium": "badge-yellow", "high": "badge-red"}
-TIER_SCORE_CLASS = {"low": "risk-green", "medium": "risk-yellow", "high": "risk-red"}
 
 with st.container(border=True, key="recent_orders_card"):
     st.markdown("<h3>Recent orders</h3>", unsafe_allow_html=True)

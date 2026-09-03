@@ -186,7 +186,9 @@ html, body, [class*="css"] {
 .risk-yellow { color: #B06000; }
 .risk-red { color: #C5221F; }
 
-.st-key-recent_orders_card {
+.st-key-recent_orders_card,
+.st-key-new_order_form_card,
+.st-key-risk_assessment_card {
     box-shadow: 0 1px 3px rgba(60, 64, 67, 0.08);
     border-radius: 14px !important;
 }
