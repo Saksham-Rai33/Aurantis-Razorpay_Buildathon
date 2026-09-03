@@ -19,6 +19,7 @@ from app.services import (
     sign_esign,
     is_ready_for_delivery,
     mark_delivered,
+    explain_order,
 )
 
 MODEL_PATH = "results/model.pkl"
@@ -193,13 +194,47 @@ def render_otp_verification(orders):
         st.caption("Complete all required actions above before marking delivered.")
 
 
+def render_evidence_vault(orders, model):
+    st.subheader("Evidence Vault")
+
+    delivered = [o for o in orders if o["delivered"]]
+    if not delivered:
+        st.info("No delivered orders yet.")
+        return
+
+    rows = []
+    for o in delivered:
+        tier = get_risk_tier(o["risk_score"])
+        explanation = explain_order(model, o)
+        rows.append({
+            "Order ID": o["order_id"],
+            "Customer": o["customer_name"],
+            "Tier": tier.upper(),
+            "Risk Score": round(o["risk_score"], 3),
+            "Top Reasons": "; ".join(explanation["top_reasons"]),
+            "OTP Code": o["otp_code"],
+            "OTP Verified At": o["otp_verified_at"],
+            "Signer": o["esign_signer"] or "—",
+            "Signed At": o["esign_signed_at"] or "—",
+            "Delivered At": o["delivered_at"],
+        })
+
+    df = pd.DataFrame(rows)
+    st.dataframe(
+        df,
+        use_container_width=True,
+        hide_index=True,
+        column_config={"Risk Score": st.column_config.NumberColumn(format="%.3f")},
+    )
+
+
 def main():
     st.set_page_config(page_title="Return-Risk Scorer — Merchant Demo", layout="wide")
     st.title("Return-Risk Scorer")
     st.caption("Razorpay AI Buildathon 2026 — Track 2: AI Risk Manager")
 
     init_state()
-    load_model()
+    model = load_model()
 
     tab1, tab2, tab3, tab4 = st.tabs([
         "Merchant Dashboard",
@@ -215,7 +250,7 @@ def main():
     with tab3:
         render_otp_verification(st.session_state.orders)
     with tab4:
-        st.info("Evidence Vault — coming soon.")
+        render_evidence_vault(st.session_state.orders, model)
 
 
 if __name__ == "__main__":
