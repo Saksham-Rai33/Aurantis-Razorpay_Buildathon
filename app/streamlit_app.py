@@ -23,8 +23,11 @@ from app.services import (
 )
 
 MODEL_PATH = "results/model.pkl"
+ICON_PATH = str(Path(__file__).resolve().parent / "assets" / "aurantis_icon.svg")
 
-TIER_COLORS = {"low": "#1a7f37", "medium": "#b58105", "high": "#cf222e"}
+TIER_COLORS = {"low": "#2DA44E", "medium": "#D97706", "high": "#E5484D"}
+TIER_BADGE_COLORS = {"low": "green", "medium": "orange", "high": "red"}
+TIER_ICONS = {"low": ":material/check_circle:", "medium": ":material/gpp_maybe:", "high": ":material/gpp_bad:"}
 
 
 @st.cache_resource
@@ -43,26 +46,30 @@ def init_state():
             st.session_state.orders = copy.deepcopy(base_demo_orders())
 
 
+def tier_badge(tier):
+    st.badge(tier.upper(), color=TIER_BADGE_COLORS[tier], icon=TIER_ICONS[tier])
+
+
 def orders_dataframe(orders):
     rows = []
     for o in orders:
         tier = get_risk_tier(o["risk_score"])
-        status = "delivered" if o["delivered"] else "pending"
+        status = "Delivered" if o["delivered"] else "Pending"
         rows.append({
             "Order ID": o["order_id"],
             "Customer": o["customer_name"],
             "Product": o["product_name"],
             "Amount (₹)": round(o["amount"], 2),
-            "Risk Score": round(o["risk_score"], 3),
+            "Risk score": o["risk_score"],
             "Tier": tier.upper(),
-            "Actions Required": ", ".join(required_actions(tier)),
+            "Actions required": ", ".join(required_actions(tier)),
             "Status": status,
         })
     return pd.DataFrame(rows)
 
 
 def render_dashboard(orders):
-    st.subheader("Merchant Dashboard")
+    st.subheader("Merchant dashboard")
 
     df = orders_dataframe(orders)
     total = len(df)
@@ -71,10 +78,10 @@ def render_dashboard(orders):
     high = (df["Tier"] == "HIGH").sum()
 
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Total Orders", total)
-    c2.metric("Low Risk", low)
-    c3.metric("Medium Risk", medium)
-    c4.metric("High Risk", high, delta=f"{high/total:.1%} flag rate", delta_color="inverse")
+    c1.metric("Total orders", total)
+    c2.metric("Low risk", low)
+    c3.metric("Medium risk", medium)
+    c4.metric("High risk", high, delta=f"{high/total:.1%} flag rate", delta_color="inverse")
 
     def tier_style(row):
         color = TIER_COLORS.get(row["Tier"].lower(), "#000000")
@@ -82,28 +89,20 @@ def render_dashboard(orders):
 
     st.dataframe(
         df.style.apply(tier_style, axis=1),
-        use_container_width=True,
         hide_index=True,
         column_config={
             "Amount (₹)": st.column_config.NumberColumn(format="%.2f"),
-            "Risk Score": st.column_config.NumberColumn(format="%.3f"),
+            "Risk score": st.column_config.ProgressColumn(format="percent", min_value=0.0, max_value=1.0),
         },
     )
 
 
-def find_order(orders, order_id):
-    for o in orders:
-        if o["order_id"] == order_id:
-            return o
-    return None
-
-
 def render_delivery_simulation(orders):
-    st.subheader("Delivery Simulation")
+    st.subheader("Delivery simulation")
 
     pending = [o for o in orders if not o["delivered"]]
     if not pending:
-        st.success("All orders delivered.")
+        st.success("All orders delivered.", icon=":material/task_alt:")
         return
 
     labels = [f"#{o['order_id']} — {o['customer_name']} ({o['product_name']})" for o in pending]
@@ -113,43 +112,55 @@ def render_delivery_simulation(orders):
     tier = get_risk_tier(order["risk_score"])
     actions = required_actions(tier)
 
-    st.markdown(f"**Risk score:** {order['risk_score']:.3f} — **Tier:** :{'green' if tier == 'low' else 'orange' if tier == 'medium' else 'red'}[{tier.upper()}]")
-    st.markdown(f"**Required actions:** {', '.join(actions)}")
-    if "manual_review" in actions:
-        st.warning("Flagged for manual review.")
+    with st.container(border=True):
+        with st.container(horizontal=True, vertical_alignment="center"):
+            st.markdown(f"**Risk score:** {order['risk_score']:.3f}")
+            tier_badge(tier)
+        st.caption(f"Required actions: {', '.join(actions)}")
+        if "manual_review" in actions:
+            st.warning("Flagged for manual review.", icon=":material/gpp_maybe:")
 
     col1, col2 = st.columns(2)
 
     with col1:
-        st.markdown("**MSG91 — OTP**")
-        if st.button("Simulate MSG91 → Send OTP", key=f"otp_{order['order_id']}"):
-            code = simulate_send_otp(order)
-            st.rerun()
-        if order["otp_sent_at"]:
-            st.info(f"OTP sent at {order['otp_sent_at']}\n\nSimulated SMS to {order['phone']}: your code is **{order['otp_code']}**")
+        with st.container(border=True):
+            st.markdown("**MSG91 — OTP**")
+            if st.button("Simulate MSG91 → send OTP", key=f"otp_{order['order_id']}"):
+                simulate_send_otp(order)
+                st.rerun()
+            if order["otp_sent_at"]:
+                st.success(
+                    f"OTP sent at {order['otp_sent_at']}\n\n"
+                    f"Simulated SMS to {order['phone']}: your code is **{order['otp_code']}**",
+                    icon=":material/sms:",
+                )
 
     with col2:
-        if "esign" in actions:
+        with st.container(border=True):
             st.markdown("**DocuSign — e-signature**")
-            if st.button("Simulate DocuSign → Send e-sign link", key=f"esign_{order['order_id']}"):
-                link = simulate_send_esign(order)
-                st.session_state[f"esign_link_{order['order_id']}"] = link
-                st.rerun()
-            if order["esign_sent_at"]:
-                link = st.session_state.get(f"esign_link_{order['order_id']}", "")
-                st.info(f"E-sign link sent at {order['esign_sent_at']}\n\nSimulated DocuSign envelope: {link}")
-        else:
-            st.markdown("**DocuSign — e-signature**")
-            st.caption("Not required for this tier.")
+            if "esign" in actions:
+                if st.button("Simulate DocuSign → send e-sign link", key=f"esign_{order['order_id']}"):
+                    link = simulate_send_esign(order)
+                    st.session_state[f"esign_link_{order['order_id']}"] = link
+                    st.rerun()
+                if order["esign_sent_at"]:
+                    link = st.session_state.get(f"esign_link_{order['order_id']}", "")
+                    st.success(
+                        f"E-sign link sent at {order['esign_sent_at']}\n\n"
+                        f"Simulated DocuSign envelope: {link}",
+                        icon=":material/draw:",
+                    )
+            else:
+                st.caption("Not required for this tier.")
 
 
 def render_otp_verification(orders):
-    st.subheader("OTP Verification")
+    st.subheader("OTP verification")
     st.caption("Delivery agent view")
 
     awaiting = [o for o in orders if not o["delivered"] and o["otp_sent_at"]]
     if not awaiting:
-        st.info("No orders awaiting verification. Send an OTP from the Delivery Simulation tab first.")
+        st.info("No orders awaiting verification. Send an OTP from the delivery simulation tab first.")
         return
 
     labels = [f"#{o['order_id']} — {o['customer_name']} ({o['product_name']})" for o in awaiting]
@@ -160,34 +171,38 @@ def render_otp_verification(orders):
     actions = required_actions(tier)
     needs_esign = "esign" in actions
 
-    st.markdown(f"**Tier:** {tier.upper()} — **Required actions:** {', '.join(actions)}")
+    with st.container(horizontal=True, vertical_alignment="center"):
+        tier_badge(tier)
+        st.caption(f"Required actions: {', '.join(actions)}")
 
-    st.markdown("**Step 1 — Verify OTP**")
-    if order["otp_verified"]:
-        st.success(f"OTP verified at {order['otp_verified_at']}")
-    else:
-        entered = st.text_input("Enter OTP code", key=f"otp_input_{order['order_id']}")
-        if st.button("Verify", key=f"otp_verify_{order['order_id']}"):
-            if verify_otp(order, entered):
-                st.rerun()
-            else:
-                st.error("Incorrect OTP. Try again.")
+    with st.container(border=True):
+        st.markdown("**Step 1 — Verify OTP**")
+        if order["otp_verified"]:
+            st.success(f"OTP verified at {order['otp_verified_at']}", icon=":material/check_circle:")
+        else:
+            entered = st.text_input("Enter OTP code", key=f"otp_input_{order['order_id']}")
+            if st.button("Verify", key=f"otp_verify_{order['order_id']}"):
+                if verify_otp(order, entered):
+                    st.rerun()
+                else:
+                    st.error("Incorrect OTP. Try again.", icon=":material/error:")
 
     if needs_esign:
-        st.markdown("**Step 2 — Capture e-signature**")
-        if order["esign_signed"]:
-            st.success(f"Signed by {order['esign_signer']} at {order['esign_signed_at']}")
-        elif not order["esign_sent_at"]:
-            st.warning("E-sign link not yet sent — go to Delivery Simulation first.")
-        else:
-            signer_name = st.text_input("Signer name", value=order["customer_name"], key=f"signer_{order['order_id']}")
-            if st.button("Sign", key=f"esign_sign_{order['order_id']}"):
-                sign_esign(order, signer_name)
-                st.rerun()
+        with st.container(border=True):
+            st.markdown("**Step 2 — Capture e-signature**")
+            if order["esign_signed"]:
+                st.success(f"Signed by {order['esign_signer']} at {order['esign_signed_at']}", icon=":material/draw:")
+            elif not order["esign_sent_at"]:
+                st.warning("E-sign link not yet sent — go to delivery simulation first.", icon=":material/warning:")
+            else:
+                signer_name = st.text_input("Signer name", value=order["customer_name"], key=f"signer_{order['order_id']}")
+                if st.button("Sign", key=f"esign_sign_{order['order_id']}"):
+                    sign_esign(order, signer_name)
+                    st.rerun()
 
     st.markdown("**Step 3 — Mark delivered**")
     if is_ready_for_delivery(order):
-        if st.button("Mark Delivered", key=f"deliver_{order['order_id']}"):
+        if st.button("Mark delivered", key=f"deliver_{order['order_id']}", type="primary", icon=":material/local_shipping:"):
             mark_delivered(order)
             st.rerun()
     else:
@@ -195,11 +210,11 @@ def render_otp_verification(orders):
 
 
 def render_evidence_vault(orders, model):
-    st.subheader("Evidence Vault")
+    st.subheader("Evidence vault")
 
     delivered = [o for o in orders if o["delivered"]]
     if not delivered:
-        st.info("No delivered orders yet.")
+        st.caption("No delivered orders yet.")
         return
 
     rows = []
@@ -210,37 +225,48 @@ def render_evidence_vault(orders, model):
             "Order ID": o["order_id"],
             "Customer": o["customer_name"],
             "Tier": tier.upper(),
-            "Risk Score": round(o["risk_score"], 3),
-            "Top Reasons": "; ".join(explanation["top_reasons"]),
-            "OTP Code": o["otp_code"],
-            "OTP Verified At": o["otp_verified_at"],
+            "Risk score": o["risk_score"],
+            "Top reasons": "; ".join(explanation["top_reasons"]),
+            "OTP code": o["otp_code"],
+            "OTP verified at": o["otp_verified_at"],
             "Signer": o["esign_signer"] or "—",
-            "Signed At": o["esign_signed_at"] or "—",
-            "Delivered At": o["delivered_at"],
+            "Signed at": o["esign_signed_at"] or "—",
+            "Delivered at": o["delivered_at"],
         })
 
     df = pd.DataFrame(rows)
     st.dataframe(
         df,
-        use_container_width=True,
         hide_index=True,
-        column_config={"Risk Score": st.column_config.NumberColumn(format="%.3f")},
+        column_config={
+            "Risk score": st.column_config.ProgressColumn(format="percent", min_value=0.0, max_value=1.0),
+        },
     )
 
 
+def render_header():
+    header = st.container(horizontal=True, vertical_alignment="center", gap="medium")
+    with header:
+        st.image(ICON_PATH, width=56)
+        with st.container():
+            st.title("Aurantis")
+            st.caption("Return-risk intelligence for e-commerce checkout — Razorpay AI Buildathon 2026, Track 2")
+
+
 def main():
-    st.set_page_config(page_title="Return-Risk Scorer — Merchant Demo", layout="wide")
-    st.title("Return-Risk Scorer")
-    st.caption("Razorpay AI Buildathon 2026 — Track 2: AI Risk Manager")
+    st.set_page_config(page_title="Aurantis", page_icon=ICON_PATH, layout="wide")
+    st.logo(ICON_PATH, icon_image=ICON_PATH, size="large")
+
+    render_header()
 
     init_state()
     model = load_model()
 
     tab1, tab2, tab3, tab4 = st.tabs([
-        "Merchant Dashboard",
-        "Delivery Simulation",
-        "OTP Verification",
-        "Evidence Vault",
+        ":material/dashboard: Merchant dashboard",
+        ":material/local_shipping: Delivery simulation",
+        ":material/verified_user: OTP verification",
+        ":material/folder_shared: Evidence vault",
     ])
 
     with tab1:

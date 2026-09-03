@@ -1,0 +1,41 @@
+[theme.light]
+primaryColor = "#C2410C"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#FFF7ED"
+textColor = "#291608"
+borderColor = "#F3D9B8"
+linkColor = "#C2410C"
+linkUnderline = false
+
+redColor = "#CF222E"
+orangeColor = "#C2410C"
+greenColor = "#1A7F37"
+
+baseRadius = "12px"
+buttonRadius = "12px"
+showWidgetBorder = true
+
+font = "Inter:https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+headingFont = "Inter:https://fonts.googleapis.com/css2?family=Inter:wght@600;700&display=swap"
+baseFontSize = 15
+
+[theme.dark]
+primaryColor = "#FB923C"
+backgroundColor = "#0B0F1A"
+secondaryBackgroundColor = "#151B2B"
+textColor = "#F3ECE4"
+borderColor = "#2A2F42"
+linkColor = "#FB923C"
+linkUnderline = false
+
+redColor = "#F85149"
+orangeColor = "#FB923C"
+greenColor = "#3FB950"
+
+baseRadius = "12px"
+buttonRadius = "12px"
+showWidgetBorder = true
+
+font = "Inter:https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+headingFont = "Inter:https://fonts.googleapis.com/css2?family=Inter:wght@600;700&display=swap"
+baseFontSize = 15
