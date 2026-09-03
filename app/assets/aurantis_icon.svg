@@ -1,9 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
   <defs>
     <linearGradient id="aurantisGradient" x1="0" y1="0" x2="128" y2="128" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#FDBA74"/>
-      <stop offset="0.55" stop-color="#F97316"/>
-      <stop offset="1" stop-color="#C2410C"/>
+      <stop offset="0" stop-color="#8AB4F8"/>
+      <stop offset="0.55" stop-color="#1A73E8"/>
+      <stop offset="1" stop-color="#0B4EA2"/>
     </linearGradient>
   </defs>
   <rect width="128" height="128" rx="30" fill="url(#aurantisGradient)"/>
