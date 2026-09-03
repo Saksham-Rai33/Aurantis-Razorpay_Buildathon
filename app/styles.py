@@ -190,7 +190,8 @@ html, body, [class*="css"] {
 .st-key-new_order_form_card,
 .st-key-risk_assessment_card,
 .st-key-delivery_queue_card,
-.st-key-delivery_detail_card {
+.st-key-delivery_detail_card,
+.st-key-evidence_vault_card {
     box-shadow: 0 1px 3px rgba(60, 64, 67, 0.08);
     border-radius: 14px !important;
 }
