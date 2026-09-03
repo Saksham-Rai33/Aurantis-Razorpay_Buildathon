@@ -15,6 +15,10 @@ from app.services import (
     required_actions,
     simulate_send_otp,
     simulate_send_esign,
+    verify_otp,
+    sign_esign,
+    is_ready_for_delivery,
+    mark_delivered,
 )
 
 MODEL_PATH = "results/model.pkl"
@@ -138,6 +142,57 @@ def render_delivery_simulation(orders):
             st.caption("Not required for this tier.")
 
 
+def render_otp_verification(orders):
+    st.subheader("OTP Verification")
+    st.caption("Delivery agent view")
+
+    awaiting = [o for o in orders if not o["delivered"] and o["otp_sent_at"]]
+    if not awaiting:
+        st.info("No orders awaiting verification. Send an OTP from the Delivery Simulation tab first.")
+        return
+
+    labels = [f"#{o['order_id']} — {o['customer_name']} ({o['product_name']})" for o in awaiting]
+    choice = st.selectbox("Select an order awaiting verification", labels, key="otp_verify_select")
+    order = awaiting[labels.index(choice)]
+
+    tier = get_risk_tier(order["risk_score"])
+    actions = required_actions(tier)
+    needs_esign = "esign" in actions
+
+    st.markdown(f"**Tier:** {tier.upper()} — **Required actions:** {', '.join(actions)}")
+
+    st.markdown("**Step 1 — Verify OTP**")
+    if order["otp_verified"]:
+        st.success(f"OTP verified at {order['otp_verified_at']}")
+    else:
+        entered = st.text_input("Enter OTP code", key=f"otp_input_{order['order_id']}")
+        if st.button("Verify", key=f"otp_verify_{order['order_id']}"):
+            if verify_otp(order, entered):
+                st.rerun()
+            else:
+                st.error("Incorrect OTP. Try again.")
+
+    if needs_esign:
+        st.markdown("**Step 2 — Capture e-signature**")
+        if order["esign_signed"]:
+            st.success(f"Signed by {order['esign_signer']} at {order['esign_signed_at']}")
+        elif not order["esign_sent_at"]:
+            st.warning("E-sign link not yet sent — go to Delivery Simulation first.")
+        else:
+            signer_name = st.text_input("Signer name", value=order["customer_name"], key=f"signer_{order['order_id']}")
+            if st.button("Sign", key=f"esign_sign_{order['order_id']}"):
+                sign_esign(order, signer_name)
+                st.rerun()
+
+    st.markdown("**Step 3 — Mark delivered**")
+    if is_ready_for_delivery(order):
+        if st.button("Mark Delivered", key=f"deliver_{order['order_id']}"):
+            mark_delivered(order)
+            st.rerun()
+    else:
+        st.caption("Complete all required actions above before marking delivered.")
+
+
 def main():
     st.set_page_config(page_title="Return-Risk Scorer — Merchant Demo", layout="wide")
     st.title("Return-Risk Scorer")
@@ -158,7 +213,7 @@ def main():
     with tab2:
         render_delivery_simulation(st.session_state.orders)
     with tab3:
-        st.info("OTP Verification — coming soon.")
+        render_otp_verification(st.session_state.orders)
     with tab4:
         st.info("Evidence Vault — coming soon.")
 
