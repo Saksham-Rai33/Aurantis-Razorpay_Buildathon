@@ -6,7 +6,14 @@ html, body, [class*="css"] {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
-#MainMenu, footer, header [data-testid="stToolbar"] {
+#MainMenu, footer {
+    visibility: hidden;
+}
+
+/* Hide only the Deploy button and hamburger menu — keep the sidebar
+   expand/collapse arrow (which also lives in the toolbar) visible. */
+[data-testid="stToolbar"] [data-testid="stMainMenuButton"],
+[data-testid="stToolbar"] [data-testid="stBaseButton-header"] {
     visibility: hidden;
 }
 
