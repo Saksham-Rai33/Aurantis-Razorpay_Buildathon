@@ -10,7 +10,12 @@ import pandas as pd
 import streamlit as st
 
 from app.data_gen import generate_demo_orders
-from app.services import get_risk_tier, required_actions
+from app.services import (
+    get_risk_tier,
+    required_actions,
+    simulate_send_otp,
+    simulate_send_esign,
+)
 
 MODEL_PATH = "results/model.pkl"
 
@@ -81,6 +86,58 @@ def render_dashboard(orders):
     )
 
 
+def find_order(orders, order_id):
+    for o in orders:
+        if o["order_id"] == order_id:
+            return o
+    return None
+
+
+def render_delivery_simulation(orders):
+    st.subheader("Delivery Simulation")
+
+    pending = [o for o in orders if not o["delivered"]]
+    if not pending:
+        st.success("All orders delivered.")
+        return
+
+    labels = [f"#{o['order_id']} — {o['customer_name']} ({o['product_name']})" for o in pending]
+    choice = st.selectbox("Select a pending order", labels)
+    order = pending[labels.index(choice)]
+
+    tier = get_risk_tier(order["risk_score"])
+    actions = required_actions(tier)
+
+    st.markdown(f"**Risk score:** {order['risk_score']:.3f} — **Tier:** :{'green' if tier == 'low' else 'orange' if tier == 'medium' else 'red'}[{tier.upper()}]")
+    st.markdown(f"**Required actions:** {', '.join(actions)}")
+    if "manual_review" in actions:
+        st.warning("Flagged for manual review.")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown("**MSG91 — OTP**")
+        if st.button("Simulate MSG91 → Send OTP", key=f"otp_{order['order_id']}"):
+            code = simulate_send_otp(order)
+            st.rerun()
+        if order["otp_sent_at"]:
+            st.info(f"OTP sent at {order['otp_sent_at']}\n\nSimulated SMS to {order['phone']}: your code is **{order['otp_code']}**")
+
+    with col2:
+        if "esign" in actions:
+            st.markdown("**DocuSign — e-signature**")
+            if st.button("Simulate DocuSign → Send e-sign link", key=f"esign_{order['order_id']}"):
+                link = simulate_send_esign(order)
+                st.session_state[f"esign_link_{order['order_id']}"] = link
+                st.rerun()
+            if order["esign_sent_at"]:
+                link = st.session_state.get(f"esign_link_{order['order_id']}", "")
+                st.info(f"E-sign link sent at {order['esign_sent_at']}\n\nSimulated DocuSign envelope: {link}")
+        else:
+            st.markdown("**DocuSign — e-signature**")
+            st.caption("Not required for this tier.")
+
+
 def main():
     st.set_page_config(page_title="Return-Risk Scorer — Merchant Demo", layout="wide")
     st.title("Return-Risk Scorer")
@@ -99,7 +156,7 @@ def main():
     with tab1:
         render_dashboard(st.session_state.orders)
     with tab2:
-        st.info("Delivery Simulation — coming soon.")
+        render_delivery_simulation(st.session_state.orders)
     with tab3:
         st.info("OTP Verification — coming soon.")
     with tab4:
