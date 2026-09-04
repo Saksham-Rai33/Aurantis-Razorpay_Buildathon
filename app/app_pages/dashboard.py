@@ -1,3 +1,4 @@
+import plotly.graph_objects as go
 import streamlit as st
 
 from app.services import TIER_BADGE_CLASS, TIER_SCORE_CLASS, get_risk_tier
@@ -8,37 +9,67 @@ st.subheader("Dashboard")
 st.caption("Live overview of today's order risk activity")
 
 total_orders = len(orders)
+low_count = sum(1 for o in orders if get_risk_tier(o["risk_score"]) == "low")
+medium_count = sum(1 for o in orders if get_risk_tier(o["risk_score"]) == "medium")
 high_risk = sum(1 for o in orders if get_risk_tier(o["risk_score"]) == "high")
 delivered = sum(1 for o in orders if o["delivered"])
 money_saved = sum(o["amount"] for o in orders if get_risk_tier(o["risk_score"]) == "high")
 flag_rate = high_risk / total_orders if total_orders else 0
+delivered_rate = delivered / total_orders if total_orders else 0
 
 st.markdown(
     f"""
     <div class="metric-card-row">
-        <div class="metric-card">
+        <div class="metric-card accent-purple">
             <div class="metric-label">Total orders today</div>
             <div class="metric-value">{total_orders}</div>
+            <div class="metric-delta neutral">▲ live order volume</div>
         </div>
-        <div class="metric-card">
+        <div class="metric-card accent-red">
             <div class="metric-label">High risk orders</div>
             <div class="metric-value">{high_risk}</div>
-            <div class="metric-delta negative">{flag_rate:.1%} flagged</div>
+            <div class="metric-delta negative">▲ {flag_rate:.1%} flagged</div>
         </div>
-        <div class="metric-card">
+        <div class="metric-card accent-green">
             <div class="metric-label">Orders delivered</div>
             <div class="metric-value">{delivered}</div>
-            <div class="metric-delta neutral">of {total_orders} total</div>
+            <div class="metric-delta positive">▲ {delivered_rate:.1%} of total</div>
         </div>
-        <div class="metric-card">
+        <div class="metric-card accent-purple">
             <div class="metric-label">Estimated money saved</div>
             <div class="metric-value">₹{money_saved:,.0f}</div>
-            <div class="metric-delta positive">Fraud loss prevented</div>
+            <div class="metric-delta positive">▲ fraud loss prevented</div>
         </div>
     </div>
     """,
     unsafe_allow_html=True,
 )
+
+with st.container(border=True, key="risk_distribution_card"):
+    st.markdown("<h3>Risk distribution</h3>", unsafe_allow_html=True)
+
+    fig = go.Figure(
+        go.Bar(
+            x=[low_count, medium_count, high_risk],
+            y=["Low", "Medium", "High"],
+            orientation="h",
+            marker_color=["#00d46a", "#ffa500", "#ff4d4d"],
+            text=[low_count, medium_count, high_risk],
+            textposition="outside",
+            textfont=dict(color="#ffffff"),
+        )
+    )
+    fig.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#a0a3b1", family="Inter"),
+        margin=dict(l=10, r=30, t=10, b=10),
+        height=220,
+        xaxis=dict(showgrid=False, zeroline=False, color="#a0a3b1"),
+        yaxis=dict(showgrid=False, zeroline=False, color="#ffffff"),
+        showlegend=False,
+    )
+    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
 with st.container(border=True, key="recent_orders_card"):
     st.markdown("<h3>Recent orders</h3>", unsafe_allow_html=True)

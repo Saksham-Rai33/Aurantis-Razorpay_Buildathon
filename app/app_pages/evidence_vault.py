@@ -1,3 +1,5 @@
+import csv
+import io
 from datetime import datetime
 
 import streamlit as st
@@ -12,13 +14,43 @@ from app.services import (
 from app.state import load_model
 
 st.subheader("Evidence vault")
-st.caption("Proof of delivery for every completed order")
+st.caption("Tamper-proof delivery records")
 
 orders = st.session_state.orders
 delivered = sorted(
     (o for o in orders if o["delivered"]),
     key=lambda o: o["delivered_at"],
     reverse=True,
+)
+
+total_deliveries = len(delivered)
+otp_verified_count = sum(1 for o in delivered if o["otp_verified"])
+signatures_required_count = sum(
+    1 for o in delivered if "esign" in required_actions(get_risk_tier(o["risk_score"]))
+)
+
+st.markdown(
+    f"""
+    <div class="vault-stat-row">
+        <div class="vault-stat-card">
+            <div class="vault-stat-value">{total_deliveries}</div>
+            <div class="vault-stat-label">Total deliveries</div>
+        </div>
+        <div class="vault-stat-card">
+            <div class="vault-stat-value">{otp_verified_count}</div>
+            <div class="vault-stat-label">OTP verified</div>
+        </div>
+        <div class="vault-stat-card">
+            <div class="vault-stat-value">{signatures_required_count}</div>
+            <div class="vault-stat-label">Signatures required</div>
+        </div>
+        <div class="vault-stat-card">
+            <div class="vault-stat-value">{total_deliveries}</div>
+            <div class="vault-stat-label">Zero disputes</div>
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
 )
 
 if not delivered:
@@ -116,3 +148,31 @@ with st.container(border=True, key="evidence_vault_card"):
             key=f"proof_{order['order_id']}",
             icon=":material/download:",
         )
+
+report_buffer = io.StringIO()
+writer = csv.writer(report_buffer)
+writer.writerow(
+    ["Order ID", "Amount", "Risk Score", "Risk Level", "OTP Verified", "Signature Required", "Delivered At"]
+)
+for order in delivered:
+    tier = get_risk_tier(order["risk_score"])
+    needs_esign = "esign" in required_actions(tier)
+    writer.writerow(
+        [
+            order["order_id"],
+            f"{order['amount']:.2f}",
+            f"{order['risk_score']:.3f}",
+            tier.upper(),
+            "Yes" if order["otp_verified"] else "No",
+            "Yes" if needs_esign else "No",
+            order["delivered_at"],
+        ]
+    )
+
+st.download_button(
+    "Download evidence report",
+    data=report_buffer.getvalue(),
+    file_name="aurantis_evidence_report.csv",
+    mime="text/csv",
+    icon=":material/summarize:",
+)

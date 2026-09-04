@@ -14,3 +14,4 @@ tqdm
 twilio
 python-dotenv
 docusign-esign
+plotly

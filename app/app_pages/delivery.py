@@ -36,90 +36,183 @@ if not pending:
 selected_id = st.session_state.get("selected_delivery_order_id")
 selected = next((o for o in pending if o["order_id"] == selected_id), None)
 
-if selected:
-    tier = get_risk_tier(selected["risk_score"])
+
+def trigger_delivery_simulation(order, tier):
     actions = required_actions(tier)
     needs_esign = "esign" in actions
 
-    with st.container(border=True, key="delivery_detail_card"):
+    if is_verify_configured():
+        otp_result = start_otp_verification()
+        if otp_result["success"]:
+            mark_otp_sent(order, code=None, provider="verify")
+        else:
+            simulate_send_otp(order)
+    else:
+        simulate_send_otp(order)
+        otp_result = {
+            "success": False,
+            "simulated": True,
+            "detail": "Twilio Verify not configured — simulated OTP.",
+        }
+    st.session_state[f"sms_result_{order['order_id']}"] = otp_result
+
+    if needs_esign:
+        docusign_result = {"success": False, "simulated": True, "detail": ""}
+        if is_docusign_configured():
+            docusign_result = create_envelope_docusign(
+                order["customer_name"], order.get("email", ""), order["order_id"],
+            )
+        if not docusign_result["success"]:
+            link = simulate_send_esign(order)
+            st.session_state[f"esign_link_{order['order_id']}"] = link
+        st.session_state[f"docusign_result_{order['order_id']}"] = docusign_result
+
+
+tab_queue, tab_customer = st.tabs(["📋 Ready to deliver", "📱 Customer delivery screen"])
+
+with tab_queue:
+    st.markdown("<h3>Ready to deliver</h3>", unsafe_allow_html=True)
+
+    card_cols = st.columns(3, gap="medium")
+    for i, order in enumerate(pending):
+        tier = get_risk_tier(order["risk_score"])
         badge_class = TIER_BADGE_CLASS[tier]
-        header_row = st.columns([5, 1], vertical_alignment="center")
-        header_row[0].markdown(
-            f'<h3 style="margin:0;">Delivery workflow — #{selected["order_id"]} '
-            f'{selected["customer_name"]}</h3>',
+        score_class = TIER_SCORE_CLASS[tier]
+        phone = order.get("phone") or CUSTOMER_PHONE
+
+        with card_cols[i % 3]:
+            with st.container(border=True, key=f"order_card_{order['order_id']}"):
+                st.markdown(
+                    f'<div class="order-id">#{order["order_id"]}</div>'
+                    f'<div class="order-meta">{order["customer_name"]}</div>',
+                    unsafe_allow_html=True,
+                )
+                st.markdown(
+                    f'<div style="margin:10px 0;">'
+                    f'<span class="badge {badge_class}">'
+                    f'<span class="risk-score-text {score_class}">{order["risk_score"]:.3f}</span></span>'
+                    f'&nbsp;<span class="badge {badge_class}">{tier.upper()}</span></div>',
+                    unsafe_allow_html=True,
+                )
+                st.markdown(
+                    f'<div class="order-meta">₹{order["amount"]:,.2f}</div>'
+                    f'<div class="order-meta">📞 {phone}</div>',
+                    unsafe_allow_html=True,
+                )
+                st.markdown("<br>", unsafe_allow_html=True)
+
+                if order["otp_sent_at"]:
+                    if st.button(
+                        "View customer screen", key=f"select_deliver_{order['order_id']}",
+                        icon=":material/smartphone:", use_container_width=True,
+                    ):
+                        st.session_state.selected_delivery_order_id = order["order_id"]
+                        st.rerun()
+                elif st.button(
+                    "Simulate delivery", key=f"select_deliver_{order['order_id']}",
+                    type="primary", icon=":material/local_shipping:", use_container_width=True,
+                ):
+                    trigger_delivery_simulation(order, tier)
+                    st.session_state.selected_delivery_order_id = order["order_id"]
+                    st.rerun()
+
+with tab_customer:
+    if not selected:
+        st.markdown(
+            """
+            <div class="placeholder-panel">
+                <div class="placeholder-icon">📱</div>
+                <div>Pick an order in <b>Ready to deliver</b> and click <b>Simulate delivery</b><br>
+                to preview what the customer sees on their phone.</div>
+            </div>
+            """,
             unsafe_allow_html=True,
         )
-        if header_row[1].button("Close", key="close_delivery_detail", icon=":material/close:"):
+    else:
+        tier = get_risk_tier(selected["risk_score"])
+        actions = required_actions(tier)
+        needs_esign = "esign" in actions
+        phone = selected.get("phone") or CUSTOMER_PHONE
+
+        top_row = st.columns([5, 1])
+        top_row[0].caption(f"Previewing order #{selected['order_id']} — {selected['customer_name']}")
+        if top_row[1].button("Change", key="change_delivery_order", icon=":material/close:"):
             del st.session_state["selected_delivery_order_id"]
             st.rerun()
 
-        st.markdown(f'<span class="badge {badge_class}">{tier.upper()}</span>', unsafe_allow_html=True)
-        st.caption(f"Required: {', '.join(actions)}")
+        sms_result = st.session_state.get(f"sms_result_{selected['order_id']}", {})
+        docusign_result = st.session_state.get(f"docusign_result_{selected['order_id']}", {})
+        esign_link = st.session_state.get(f"esign_link_{selected['order_id']}")
 
-        if not selected["otp_sent_at"]:
-            if st.button("Simulate delivery", type="primary", icon=":material/local_shipping:"):
-                if is_verify_configured():
-                    otp_result = start_otp_verification()
-                    if otp_result["success"]:
-                        mark_otp_sent(selected, code=None, provider="verify")
-                    else:
-                        simulate_send_otp(selected)
-                else:
-                    simulate_send_otp(selected)
-                    otp_result = {
-                        "success": False,
-                        "simulated": True,
-                        "detail": "Twilio Verify not configured — simulated OTP.",
-                    }
-                st.session_state[f"sms_result_{selected['order_id']}"] = otp_result
+        with st.container(border=True, key="phone_screen_card"):
+            st.markdown(
+                """
+                <div class="phone-notch"></div>
+                <div class="phone-statusbar"><span>9:41</span><span>Aurantis</span><span>🔋 100%</span></div>
+                """,
+                unsafe_allow_html=True,
+            )
+            st.markdown(
+                f"""
+                <div class="phone-app-header">
+                    <div class="avatar">A</div>
+                    <div>
+                        <div class="contact-name">Aurantis Delivery</div>
+                        <div class="contact-sub">to {phone}</div>
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
-                if needs_esign:
-                    docusign_result = {"success": False, "simulated": True, "detail": ""}
-                    if is_docusign_configured():
-                        docusign_result = create_envelope_docusign(
-                            selected["customer_name"],
-                            selected.get("email", ""),
-                            selected["order_id"],
-                        )
-                    if not docusign_result["success"]:
-                        link = simulate_send_esign(selected)
-                        st.session_state[f"esign_link_{selected['order_id']}"] = link
-                    st.session_state[f"docusign_result_{selected['order_id']}"] = docusign_result
-                st.rerun()
-        else:
-            sms_result = st.session_state.get(f"sms_result_{selected['order_id']}", {})
             if selected.get("otp_provider") == "verify":
-                st.success(
-                    f"Real OTP sent via Twilio Verify to {CUSTOMER_PHONE}. Check your phone for the code.",
-                    icon=":material/sms:",
+                otp_msg = (
+                    "🔐 Your Aurantis delivery OTP has been sent to your phone. Enter the code "
+                    f"you received to confirm delivery of order #{selected['order_id']}."
                 )
             else:
-                st.info(
-                    f"Simulated SMS to {CUSTOMER_PHONE}: your code is **{selected['otp_code']}**",
-                    icon=":material/sms:",
+                otp_msg = (
+                    f"🔐 Your Aurantis delivery OTP for order #{selected['order_id']} is: "
+                    f"<b>{selected['otp_code']}</b>"
                 )
-                st.caption(sms_result.get("detail", ""))
+            st.markdown(
+                f'<div class="msg-bubble">{otp_msg}<span class="msg-time">now</span></div>',
+                unsafe_allow_html=True,
+            )
 
             if needs_esign:
-                docusign_result = st.session_state.get(f"docusign_result_{selected['order_id']}", {})
                 if docusign_result.get("success"):
-                    st.success(
-                        f"Real DocuSign envelope sent to {selected.get('email', 'customer')} "
-                        f"({docusign_result.get('detail', '')})",
-                        icon=":material/draw:",
+                    esign_msg = (
+                        "✍️ Please sign your delivery confirmation — check "
+                        f"<b>{selected.get('email', 'your inbox')}</b> for the DocuSign link."
                     )
                 else:
-                    esign_link = st.session_state.get(f"esign_link_{selected['order_id']}")
-                    st.info(f"Simulated DocuSign envelope: {esign_link}", icon=":material/draw:")
-                    st.caption(docusign_result.get("detail", ""))
+                    esign_msg = (
+                        "✍️ Please sign your delivery confirmation: "
+                        f'<a href="{esign_link}">{esign_link}</a>'
+                    )
+                st.markdown(
+                    f'<div class="msg-bubble">{esign_msg}<span class="msg-time">now</span></div>',
+                    unsafe_allow_html=True,
+                )
 
-            st.markdown("**Delivery agent verification**")
+            st.markdown(
+                '<div class="phone-section-label">Confirm receipt</div>',
+                unsafe_allow_html=True,
+            )
 
             if selected["otp_verified"]:
                 st.success(f"OTP verified at {selected['otp_verified_at']}", icon=":material/check_circle:")
             else:
-                entered = st.text_input("Enter OTP code", key=f"otp_input_{selected['order_id']}")
-                if st.button("Verify OTP", key=f"verify_{selected['order_id']}"):
+                with st.container(key="phone_otp_input_wrap"):
+                    entered = st.text_input(
+                        "Enter OTP code", key=f"otp_input_{selected['order_id']}",
+                        label_visibility="collapsed", placeholder="Enter OTP",
+                    )
+                if st.button(
+                    "Verify OTP", key=f"verify_{selected['order_id']}",
+                    type="primary", use_container_width=True,
+                ):
                     if selected.get("otp_provider") == "verify":
                         check = check_otp_verification(entered)
                         if check["success"]:
@@ -134,7 +227,7 @@ if selected:
 
             if needs_esign and not selected["esign_signed"]:
                 confirmed = st.checkbox(
-                    "Customer has completed the DocuSign e-signature",
+                    "I have signed the DocuSign delivery confirmation",
                     key=f"esign_confirm_{selected['order_id']}",
                 )
                 if confirmed:
@@ -147,38 +240,14 @@ if selected:
                 )
 
             if is_ready_for_delivery(selected):
-                if st.button("Confirm delivery", type="primary", icon=":material/task_alt:"):
-                    mark_delivered(selected)
-                    del st.session_state["selected_delivery_order_id"]
-                    st.toast(f"Order #{selected['order_id']} delivered.", icon=":material/task_alt:")
-                    st.rerun()
+                with st.container(key="confirm_order_wrap"):
+                    if st.button(
+                        "Confirm delivery", type="primary", icon=":material/task_alt:",
+                        use_container_width=True,
+                    ):
+                        mark_delivered(selected)
+                        del st.session_state["selected_delivery_order_id"]
+                        st.toast(f"Order #{selected['order_id']} delivered.", icon=":material/task_alt:")
+                        st.rerun()
             else:
                 st.caption("Complete OTP verification (and e-signature, if required) before confirming.")
-
-with st.container(border=True, key="delivery_queue_card"):
-    st.markdown("<h3>Ready to deliver</h3>", unsafe_allow_html=True)
-
-    header_cols = st.columns([1.2, 1, 1, 1, 1.1])
-    for col, label in zip(header_cols, ["Order ID", "Amount", "Risk score", "Risk level", "Action"]):
-        col.markdown(f'<div class="table-header">{label}</div>', unsafe_allow_html=True)
-
-    for order in pending:
-        tier = get_risk_tier(order["risk_score"])
-        badge_class = TIER_BADGE_CLASS[tier]
-        score_class = TIER_SCORE_CLASS[tier]
-
-        row = st.columns([1.2, 1, 1, 1, 1.1], vertical_alignment="center")
-        row[0].markdown(
-            f'<div class="order-id">#{order["order_id"]}</div>'
-            f'<div class="order-meta">{order["customer_name"]}</div>',
-            unsafe_allow_html=True,
-        )
-        row[1].markdown(f'<div class="order-meta">₹{order["amount"]:,.2f}</div>', unsafe_allow_html=True)
-        row[2].markdown(
-            f'<span class="badge {badge_class}"><span class="risk-score-text {score_class}">{order["risk_score"]:.3f}</span></span>',
-            unsafe_allow_html=True,
-        )
-        row[3].markdown(f'<span class="badge {badge_class}">{tier.upper()}</span>', unsafe_allow_html=True)
-        if row[4].button("Deliver", key=f"select_deliver_{order['order_id']}"):
-            st.session_state.selected_delivery_order_id = order["order_id"]
-            st.rerun()
