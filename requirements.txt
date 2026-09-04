@@ -11,4 +11,5 @@ streamlit
 jupyter
 joblib
 tqdm
-requests
+twilio
+python-dotenv

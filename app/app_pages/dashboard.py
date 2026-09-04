@@ -31,7 +31,7 @@ st.markdown(
             <div class="metric-delta neutral">of {total_orders} total</div>
         </div>
         <div class="metric-card">
-            <div class="metric-label">Money saved</div>
+            <div class="metric-label">Estimated money saved</div>
             <div class="metric-value">₹{money_saved:,.0f}</div>
             <div class="metric-delta positive">Fraud loss prevented</div>
         </div>
@@ -43,8 +43,8 @@ st.markdown(
 with st.container(border=True, key="recent_orders_card"):
     st.markdown("<h3>Recent orders</h3>", unsafe_allow_html=True)
 
-    header_cols = st.columns([1.2, 1, 1, 1, 1, 0.8])
-    headers = ["Order ID", "Amount", "Risk score", "Risk level", "Status", "Action"]
+    header_cols = st.columns([1.2, 1, 1.2, 1, 1, 0.8])
+    headers = ["Order ID", "Amount", "Product", "Risk score", "Status", "Action"]
     for col, label in zip(header_cols, headers):
         col.markdown(f'<div class="table-header">{label}</div>', unsafe_allow_html=True)
 
@@ -57,18 +57,18 @@ with st.container(border=True, key="recent_orders_card"):
         status_class = "badge-blue" if order["delivered"] else "badge-grey"
         status_label = "Delivered" if order["delivered"] else "Pending"
 
-        row = st.columns([1.2, 1, 1, 1, 1, 0.8], vertical_alignment="center")
+        row = st.columns([1.2, 1, 1.2, 1, 1, 0.8], vertical_alignment="center")
         row[0].markdown(
             f'<div class="order-id">#{order["order_id"]}</div>'
             f'<div class="order-meta">{order["customer_name"]}</div>',
             unsafe_allow_html=True,
         )
         row[1].markdown(f'<div class="order-meta">₹{order["amount"]:,.2f}</div>', unsafe_allow_html=True)
-        row[2].markdown(
+        row[2].markdown(f'<div class="order-meta">{order["product_name"]}</div>', unsafe_allow_html=True)
+        row[3].markdown(
             f'<span class="badge {badge_class}"><span class="risk-score-text {score_class}">{order["risk_score"]:.3f}</span></span>',
             unsafe_allow_html=True,
         )
-        row[3].markdown(f'<span class="badge {badge_class}">{tier.upper()}</span>', unsafe_allow_html=True)
         row[4].markdown(f'<span class="badge {status_class}">{status_label}</span>', unsafe_allow_html=True)
         if row[5].button("View", key=f"view_{order['order_id']}"):
             st.toast(

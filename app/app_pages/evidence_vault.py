@@ -64,8 +64,8 @@ model = load_model()
 with st.container(border=True, key="evidence_vault_card"):
     st.markdown("<h3>Delivered orders</h3>", unsafe_allow_html=True)
 
-    header_cols = st.columns([1.2, 1, 1.1, 1.4, 1.5, 1])
-    headers = ["Order ID", "Risk score", "OTP confirmed", "Signature", "Delivered at", "Proof"]
+    header_cols = st.columns([1.0, 0.8, 0.8, 0.9, 1.1, 1.2, 1.3])
+    headers = ["Order ID", "Amount", "Risk score", "OTP verified", "Signature required", "Timestamp", "Proof"]
     for col, label in zip(header_cols, headers):
         col.markdown(f'<div class="table-header">{label}</div>', unsafe_allow_html=True)
 
@@ -75,36 +75,37 @@ with st.container(border=True, key="evidence_vault_card"):
         score_class = TIER_SCORE_CLASS[tier]
         needs_esign = "esign" in required_actions(tier)
 
-        row = st.columns([1.2, 1, 1.1, 1.4, 1.5, 1], vertical_alignment="center")
+        row = st.columns([1.0, 0.8, 0.8, 0.9, 1.1, 1.2, 1.3], vertical_alignment="center")
         row[0].markdown(
             f'<div class="order-id">#{order["order_id"]}</div>'
             f'<div class="order-meta">{order["customer_name"]}</div>',
             unsafe_allow_html=True,
         )
-        row[1].markdown(
+        row[1].markdown(f'<div class="order-meta">₹{order["amount"]:,.2f}</div>', unsafe_allow_html=True)
+        row[2].markdown(
             f'<span class="badge {badge_class}"><span class="risk-score-text {score_class}">{order["risk_score"]:.3f}</span></span>',
             unsafe_allow_html=True,
         )
-        row[2].markdown(
+        row[3].markdown(
             '<span class="badge badge-green">✓ Verified</span>',
             unsafe_allow_html=True,
         )
         if needs_esign:
-            row[3].markdown(
+            row[4].markdown(
                 f'<span class="badge badge-green">✓ Signed</span>'
                 f'<div class="order-meta">{order["esign_signer"]}</div>',
                 unsafe_allow_html=True,
             )
         else:
-            row[3].markdown('<span class="badge badge-grey">Not required</span>', unsafe_allow_html=True)
-        row[4].markdown(
+            row[4].markdown('<span class="badge badge-grey">Not required</span>', unsafe_allow_html=True)
+        row[5].markdown(
             f'<div class="order-meta">{format_timestamp(order["delivered_at"])}</div>',
             unsafe_allow_html=True,
         )
 
         top_reasons = explain_order(model, order)["top_reasons"]
         proof_text = build_proof_text(order, tier, top_reasons)
-        row[5].download_button(
+        row[6].download_button(
             "Download",
             data=proof_text,
             file_name=f"aurantis_order_{order['order_id']}_proof.txt",

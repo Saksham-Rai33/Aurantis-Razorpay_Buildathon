@@ -8,8 +8,8 @@ TIER_BADGE_CLASS = {"low": "badge-green", "medium": "badge-yellow", "high": "bad
 TIER_SCORE_CLASS = {"low": "risk-green", "medium": "risk-yellow", "high": "risk-red"}
 
 RECOMMENDED_ACTION_TEXT = {
-    "low": "Send OTP via MSG91 to confirm delivery.",
-    "medium": "Send OTP via MSG91 and a DocuSign e-signature link.",
+    "low": "Send OTP via Twilio to confirm delivery.",
+    "medium": "Send OTP via Twilio and a DocuSign e-signature link.",
     "high": "Flag for manual review, then require OTP and a DocuSign e-signature.",
 }
 

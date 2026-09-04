@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 
 import streamlit as st
 
-from app.scoring import CARD_TYPES, PRODUCT_CATEGORIES, score_new_order
+from app.scoring import CARD_TYPES, PRODUCT_CATEGORIES, PRODUCT_CATEGORY_LABELS, score_new_order
 from app.services import (
     TIER_BADGE_CLASS,
     TIER_SCORE_CLASS,
@@ -28,19 +28,19 @@ with st.container(border=True, key="new_order_form_card"):
     with st.form("new_order_form"):
         r1c1, r1c2 = st.columns(2)
         amount = r1c1.number_input("Amount (₹)", min_value=0.0, step=50.0, format="%.2f")
-        category = r1c2.selectbox("Product category", PRODUCT_CATEGORIES)
+        category = r1c2.selectbox(
+            "Product category", PRODUCT_CATEGORIES, format_func=lambda c: PRODUCT_CATEGORY_LABELS[c]
+        )
 
         r2c1, r2c2 = st.columns(2)
         email = r2c1.text_input("Customer email")
-        phone = r2c2.text_input("Phone number", placeholder="9XXXXXXXXX")
+        card_type = r2c2.selectbox("Card type", CARD_TYPES)
 
         r3c1, r3c2 = st.columns(2)
-        billing_address = r3c1.text_input("Billing address")
-        shipping_address = r3c2.text_input("Shipping address")
+        billing_city = r3c1.text_input("Billing city")
+        shipping_city = r3c2.text_input("Shipping city")
 
-        r4c1, r4c2 = st.columns(2)
-        card_type = r4c1.selectbox("Card type", CARD_TYPES)
-        order_time = r4c2.time_input("Time", value=datetime.now().time())
+        order_hour = st.slider("Hour of day", min_value=0, max_value=23, value=datetime.now().hour)
 
         submitted = st.form_submit_button(
             "Analyze risk", type="primary", icon=":material/psychology:"
@@ -51,25 +51,22 @@ with st.container(border=True, key="new_order_form_card"):
             st.error("Enter an order amount greater than zero.", icon=":material/error:")
         elif "@" not in email:
             st.error("Enter a valid customer email.", icon=":material/error:")
-        elif not phone.strip():
-            st.error("Enter a phone number for delivery OTP.", icon=":material/error:")
         else:
             model = load_model()
             pool = st.session_state.orders
             result = score_new_order(
                 model, pool,
                 amount=amount, category=category, email=email,
-                billing_address=billing_address, shipping_address=shipping_address,
-                card_type=card_type, order_hour=order_time.hour,
+                billing_city=billing_city, shipping_city=shipping_city,
+                card_type=card_type, order_hour=order_hour,
             )
             st.session_state.new_order_analysis = {
                 **result,
                 "amount": amount,
                 "category": category,
                 "email": email,
-                "phone": phone.strip(),
-                "billing_address": billing_address,
-                "shipping_address": shipping_address,
+                "billing_city": billing_city,
+                "shipping_city": shipping_city,
                 "card_type": card_type,
             }
 
@@ -112,15 +109,13 @@ if analysis:
             new_order = {
                 "order_id": new_id,
                 "customer_name": name_from_email(analysis["email"]),
-                "phone": analysis["phone"],
-                "product_name": analysis["category"],
-                "address": analysis["billing_address"],
+                "product_name": PRODUCT_CATEGORY_LABELS[analysis["category"]],
                 "amount": analysis["amount"],
                 "risk_score": analysis["final_score"],
                 **{col: analysis["features"][col] for col in FEATURE_COLS},
                 "email": analysis["email"],
-                "billing_address": analysis["billing_address"],
-                "shipping_address": analysis["shipping_address"],
+                "billing_city": analysis["billing_city"],
+                "shipping_city": analysis["shipping_city"],
                 "card_type": analysis["card_type"],
                 "created_at": datetime.now(timezone.utc).isoformat(),
                 "otp_code": None,

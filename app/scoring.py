@@ -6,20 +6,16 @@ import pandas as pd
 from src.features.engineer import FEATURE_COLS
 from app.services import explain_order, get_risk_tier
 
-PRODUCT_CATEGORIES = [
-    "Electronics",
-    "Fashion & apparel",
-    "Home & kitchen",
-    "Beauty & personal care",
-    "Sports & outdoors",
-    "Grocery",
-    "Books & media",
-    "Jewelry & accessories",
-    "Gift cards",
-    "Other",
-]
+PRODUCT_CATEGORY_LABELS = {
+    "H": "H — Home & garden",
+    "S": "S — Software/digital",
+    "R": "R — Retail/general",
+}
+PRODUCT_CATEGORIES = list(PRODUCT_CATEGORY_LABELS)
 
-HIGH_RISK_CATEGORIES = {"Electronics", "Jewelry & accessories", "Gift cards"}
+# Matches src/data/labeling.py HIGH_RISK_PRODUCTS exactly — these are the
+# IEEE-CIS ProductCD codes the original heuristic already flags as risky.
+HIGH_RISK_CATEGORIES = {"H", "S", "R"}
 
 CARD_TYPES = ["Visa", "Mastercard", "American Express", "Discover", "RuPay", "Diners Club"]
 
@@ -46,20 +42,21 @@ def build_feature_vector(amount, pool):
     return features
 
 
-def evaluate_rules(amount, category, email, billing_address, shipping_address, card_type, order_hour):
+def evaluate_rules(amount, category, email, billing_city, shipping_city, card_type, order_hour):
     flags = []
 
-    billing = billing_address.strip().lower()
-    shipping = shipping_address.strip().lower()
+    billing = billing_city.strip().lower()
+    shipping = shipping_city.strip().lower()
     if billing and shipping and billing != shipping:
-        flags.append("Billing and shipping addresses differ")
+        flags.append("Billing and shipping cities differ")
 
     domain = email.split("@")[-1].lower() if "@" in email else ""
     if domain in DISPOSABLE_EMAIL_DOMAINS:
         flags.append("Disposable email domain used")
 
     if category in HIGH_RISK_CATEGORIES:
-        flags.append(f"High-return-risk category ({category})")
+        label = PRODUCT_CATEGORY_LABELS.get(category, category)
+        flags.append(f"High-return-risk product category ({label})")
 
     if amount >= 500:
         flags.append(f"High order value (₹{amount:,.0f})")
@@ -76,14 +73,14 @@ def evaluate_rules(amount, category, email, billing_address, shipping_address, c
     return flags
 
 
-def score_new_order(model, pool, *, amount, category, email, billing_address,
-                     shipping_address, card_type, order_hour):
+def score_new_order(model, pool, *, amount, category, email, billing_city,
+                     shipping_city, card_type, order_hour):
     features = build_feature_vector(amount, pool)
     row = pd.DataFrame([features])[FEATURE_COLS]
     model_score = float(model.predict_proba(row)[:, 1][0])
 
     rule_flags = evaluate_rules(
-        amount, category, email, billing_address, shipping_address, card_type, order_hour
+        amount, category, email, billing_city, shipping_city, card_type, order_hour
     )
     escalation = min(MAX_RULE_ESCALATION, ESCALATION_PER_FLAG * len(rule_flags))
     final_score = min(1.0, model_score + escalation)

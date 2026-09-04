@@ -1,99 +1,51 @@
 import os
 
-import requests
-import streamlit as st
+from dotenv import load_dotenv
 
-PLACEHOLDER = "PLACEHOLDER_API_KEY"
+load_dotenv()
 
-
-def _get_config(name, default=PLACEHOLDER):
-    value = os.environ.get(name)
-    if value:
-        return value
-    try:
-        return st.secrets.get(name, default)
-    except Exception:
-        return default
+PLACEHOLDER = "placeholder"
 
 
-MSG91_API_KEY = _get_config("MSG91_API_KEY")
-MSG91_SENDER_ID = _get_config("MSG91_SENDER_ID", "AURANT")
-MSG91_ROUTE = "4"
+def _get_config(name, default=""):
+    return os.environ.get(name, default)
+
+
+TWILIO_ACCOUNT_SID = _get_config("TWILIO_ACCOUNT_SID")
+TWILIO_AUTH_TOKEN = _get_config("TWILIO_AUTH_TOKEN")
+TWILIO_PHONE_NUMBER = _get_config("TWILIO_PHONE_NUMBER")
+CUSTOMER_PHONE = _get_config("CUSTOMER_PHONE")
 
 DOCUSIGN_API_KEY = _get_config("DOCUSIGN_API_KEY")
-DOCUSIGN_ACCOUNT_ID = _get_config("DOCUSIGN_ACCOUNT_ID")
-DOCUSIGN_BASE_URL = _get_config("DOCUSIGN_BASE_URL", "https://demo.docusign.net/restapi")
 
 
-def is_msg91_configured():
-    return bool(MSG91_API_KEY) and MSG91_API_KEY != PLACEHOLDER
+def is_twilio_configured():
+    return bool(TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN and TWILIO_PHONE_NUMBER and CUSTOMER_PHONE)
 
 
 def is_docusign_configured():
-    return (
-        bool(DOCUSIGN_API_KEY) and DOCUSIGN_API_KEY != PLACEHOLDER
-        and bool(DOCUSIGN_ACCOUNT_ID) and DOCUSIGN_ACCOUNT_ID != PLACEHOLDER
-    )
+    return bool(DOCUSIGN_API_KEY) and DOCUSIGN_API_KEY.lower() != PLACEHOLDER
 
 
-def send_sms_msg91(phone, message):
-    """Send a real SMS via MSG91's HTTP API when MSG91_API_KEY is configured.
-    Falls back to a clearly-labeled simulated result when it's still the
-    placeholder, so the app never sends a request with a fake key."""
-    if not is_msg91_configured():
+def send_sms_twilio(message):
+    """Send a real SMS via Twilio to CUSTOMER_PHONE when credentials are
+    configured. Falls back to a clearly-labeled simulated result otherwise,
+    so the app never fires a request with missing/fake credentials."""
+    if not is_twilio_configured():
         return {
             "success": False,
             "simulated": True,
-            "detail": "MSG91_API_KEY not configured — simulated send.",
-        }
-    mobile = phone if phone.startswith("91") else f"91{phone}"
-    try:
-        response = requests.get(
-            "https://api.msg91.com/api/sendhttp.php",
-            params={
-                "authkey": MSG91_API_KEY,
-                "mobiles": mobile,
-                "message": message,
-                "sender": MSG91_SENDER_ID,
-                "route": MSG91_ROUTE,
-                "country": "91",
-            },
-            timeout=10,
-        )
-        response.raise_for_status()
-        return {"success": True, "simulated": False, "detail": response.text}
-    except Exception as exc:
-        return {"success": False, "simulated": False, "detail": f"MSG91 request failed: {exc}"}
-
-
-def create_envelope_docusign(signer_name, signer_email, order_id):
-    """Create a real DocuSign envelope when DocuSign credentials are
-    configured. Falls back to a simulated envelope link otherwise."""
-    if not is_docusign_configured():
-        return {
-            "success": False,
-            "simulated": True,
-            "detail": "DocuSign credentials not configured — simulated e-sign link.",
-            "link": None,
+            "detail": "Twilio credentials not configured — simulated send.",
         }
     try:
-        response = requests.post(
-            f"{DOCUSIGN_BASE_URL}/v2.1/accounts/{DOCUSIGN_ACCOUNT_ID}/envelopes",
-            headers={
-                "Authorization": f"Bearer {DOCUSIGN_API_KEY}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "emailSubject": f"Aurantis delivery confirmation — order #{order_id}",
-                "status": "sent",
-                "recipients": {
-                    "signers": [{"email": signer_email, "name": signer_name, "recipientId": "1"}]
-                },
-            },
-            timeout=10,
+        from twilio.rest import Client
+
+        client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+        msg = client.messages.create(
+            body=message,
+            from_=TWILIO_PHONE_NUMBER,
+            to=CUSTOMER_PHONE,
         )
-        response.raise_for_status()
-        data = response.json()
-        return {"success": True, "simulated": False, "detail": "Envelope created", "link": data.get("uri")}
+        return {"success": True, "simulated": False, "detail": f"Twilio SID {msg.sid}"}
     except Exception as exc:
-        return {"success": False, "simulated": False, "detail": f"DocuSign request failed: {exc}", "link": None}
+        return {"success": False, "simulated": False, "detail": f"Twilio request failed: {exc}"}
