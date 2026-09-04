@@ -1,12 +1,21 @@
 import streamlit as st
 
-from app.integrations import CUSTOMER_PHONE, send_sms_twilio
+from app.integrations import (
+    CUSTOMER_PHONE,
+    check_otp_verification,
+    create_envelope_docusign,
+    is_docusign_configured,
+    is_verify_configured,
+    start_otp_verification,
+)
 from app.services import (
     TIER_BADGE_CLASS,
     TIER_SCORE_CLASS,
     get_risk_tier,
     is_ready_for_delivery,
     mark_delivered,
+    mark_otp_sent,
+    mark_otp_verified,
     required_actions,
     sign_esign,
     simulate_send_esign,
@@ -49,24 +58,41 @@ if selected:
 
         if not selected["otp_sent_at"]:
             if st.button("Simulate delivery", type="primary", icon=":material/local_shipping:"):
-                code = simulate_send_otp(selected)
-                sms_result = send_sms_twilio(
-                    f"Your Aurantis delivery OTP for order #{selected['order_id']} is {code}. Do not share it."
-                )
-                st.session_state[f"sms_result_{selected['order_id']}"] = sms_result
+                if is_verify_configured():
+                    otp_result = start_otp_verification()
+                    if otp_result["success"]:
+                        mark_otp_sent(selected, code=None, provider="verify")
+                    else:
+                        simulate_send_otp(selected)
+                else:
+                    simulate_send_otp(selected)
+                    otp_result = {
+                        "success": False,
+                        "simulated": True,
+                        "detail": "Twilio Verify not configured — simulated OTP.",
+                    }
+                st.session_state[f"sms_result_{selected['order_id']}"] = otp_result
 
                 if needs_esign:
-                    link = simulate_send_esign(selected)
-                    st.session_state[f"esign_link_{selected['order_id']}"] = link
-                    docusign_sms_result = send_sms_twilio(
-                        f"Aurantis: please complete your e-signature for order #{selected['order_id']}: {link}"
-                    )
-                    st.session_state[f"docusign_sms_result_{selected['order_id']}"] = docusign_sms_result
+                    docusign_result = {"success": False, "simulated": True, "detail": ""}
+                    if is_docusign_configured():
+                        docusign_result = create_envelope_docusign(
+                            selected["customer_name"],
+                            selected.get("email", ""),
+                            selected["order_id"],
+                        )
+                    if not docusign_result["success"]:
+                        link = simulate_send_esign(selected)
+                        st.session_state[f"esign_link_{selected['order_id']}"] = link
+                    st.session_state[f"docusign_result_{selected['order_id']}"] = docusign_result
                 st.rerun()
         else:
             sms_result = st.session_state.get(f"sms_result_{selected['order_id']}", {})
-            if sms_result.get("success"):
-                st.success(f"Real OTP SMS sent via Twilio to {CUSTOMER_PHONE}", icon=":material/sms:")
+            if selected.get("otp_provider") == "verify":
+                st.success(
+                    f"Real OTP sent via Twilio Verify to {CUSTOMER_PHONE}. Check your phone for the code.",
+                    icon=":material/sms:",
+                )
             else:
                 st.info(
                     f"Simulated SMS to {CUSTOMER_PHONE}: your code is **{selected['otp_code']}**",
@@ -75,16 +101,17 @@ if selected:
                 st.caption(sms_result.get("detail", ""))
 
             if needs_esign:
-                docusign_sms_result = st.session_state.get(f"docusign_sms_result_{selected['order_id']}", {})
-                esign_link = st.session_state.get(f"esign_link_{selected['order_id']}")
-                if docusign_sms_result.get("success"):
+                docusign_result = st.session_state.get(f"docusign_result_{selected['order_id']}", {})
+                if docusign_result.get("success"):
                     st.success(
-                        f"Real DocuSign-link SMS sent via Twilio to {CUSTOMER_PHONE}: {esign_link}",
+                        f"Real DocuSign envelope sent to {selected.get('email', 'customer')} "
+                        f"({docusign_result.get('detail', '')})",
                         icon=":material/draw:",
                     )
                 else:
-                    st.info(f"Simulated DocuSign-link SMS: {esign_link}", icon=":material/draw:")
-                    st.caption(docusign_sms_result.get("detail", ""))
+                    esign_link = st.session_state.get(f"esign_link_{selected['order_id']}")
+                    st.info(f"Simulated DocuSign envelope: {esign_link}", icon=":material/draw:")
+                    st.caption(docusign_result.get("detail", ""))
 
             st.markdown("**Delivery agent verification**")
 
@@ -93,7 +120,14 @@ if selected:
             else:
                 entered = st.text_input("Enter OTP code", key=f"otp_input_{selected['order_id']}")
                 if st.button("Verify OTP", key=f"verify_{selected['order_id']}"):
-                    if verify_otp(selected, entered):
+                    if selected.get("otp_provider") == "verify":
+                        check = check_otp_verification(entered)
+                        if check["success"]:
+                            mark_otp_verified(selected)
+                            st.rerun()
+                        else:
+                            st.error(f"Incorrect OTP. {check.get('detail', '')}", icon=":material/error:")
+                    elif verify_otp(selected, entered):
                         st.rerun()
                     else:
                         st.error("Incorrect OTP. Try again.", icon=":material/error:")

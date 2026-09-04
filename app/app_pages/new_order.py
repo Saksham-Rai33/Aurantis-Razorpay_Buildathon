@@ -119,6 +119,7 @@ if analysis:
                 "card_type": analysis["card_type"],
                 "created_at": datetime.now(timezone.utc).isoformat(),
                 "otp_code": None,
+                "otp_provider": None,
                 "otp_sent_at": None,
                 "otp_verified": False,
                 "otp_verified_at": None,

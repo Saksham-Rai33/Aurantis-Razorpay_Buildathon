@@ -38,19 +38,28 @@ def required_actions(tier):
     return ["manual_review", "otp", "esign"]
 
 
-def simulate_send_otp(order):
-    code = f"{random.randint(0, 999999):06d}"
+def mark_otp_sent(order, code=None, provider="local"):
     order["otp_code"] = code
     order["otp_sent_at"] = _now()
     order["otp_verified"] = False
     order["otp_verified_at"] = None
+    order["otp_provider"] = provider
+
+
+def mark_otp_verified(order):
+    order["otp_verified"] = True
+    order["otp_verified_at"] = _now()
+
+
+def simulate_send_otp(order):
+    code = f"{random.randint(0, 999999):06d}"
+    mark_otp_sent(order, code=code, provider="local")
     return code
 
 
 def verify_otp(order, entered_code):
     if order.get("otp_code") is not None and entered_code == order["otp_code"]:
-        order["otp_verified"] = True
-        order["otp_verified_at"] = _now()
+        mark_otp_verified(order)
         return True
     return False
 

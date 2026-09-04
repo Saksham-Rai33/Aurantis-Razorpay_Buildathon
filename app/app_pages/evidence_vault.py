@@ -45,8 +45,11 @@ def build_proof_text(order, tier, top_reasons):
         "Top risk reasons:",
         *[f"  - {reason}" for reason in top_reasons],
         "",
-        f"OTP verified: Yes, at {order['otp_verified_at']} (code {order['otp_code']})",
     ]
+    if order.get("otp_provider") == "verify":
+        lines.append(f"OTP verified: Yes, at {order['otp_verified_at']} (via Twilio Verify)")
+    else:
+        lines.append(f"OTP verified: Yes, at {order['otp_verified_at']} (code {order['otp_code']})")
     if "esign" in required_actions(tier):
         lines.append(
             f"E-signature: Signed by {order['esign_signer']} at {order['esign_signed_at']}"

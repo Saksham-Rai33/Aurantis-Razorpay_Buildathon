@@ -31,7 +31,8 @@ def _fake_customer(rng):
     name = f"{rng.choice(FIRST_NAMES)} {rng.choice(LAST_NAMES)}"
     phone = f"9{rng.randint(100000000, 999999999)}"
     address = f"{rng.randint(1, 999)}, {rng.choice(CITIES)}"
-    return name, phone, address
+    email = f"{name.lower().replace(' ', '.')}.{rng.randint(100, 999)}@example.com"
+    return name, phone, address, email
 
 
 def generate_demo_orders(n=50, seed=42):
@@ -49,18 +50,20 @@ def generate_demo_orders(n=50, seed=42):
 
     orders = []
     for i, row in sample.iterrows():
-        name, phone, address = _fake_customer(rng)
+        name, phone, address, email = _fake_customer(rng)
         feature_values = {col: float(row[col]) if row[col] == row[col] else -999.0 for col in FEATURE_COLS}
         orders.append({
             "order_id": int(row["TransactionID"]),
             "customer_name": name,
             "phone": phone,
+            "email": email,
             "product_name": rng.choice(PRODUCTS),
             "address": address,
             "amount": float(row["TransactionAmt"]),
             "risk_score": float(scores[i]),
             **feature_values,
             "otp_code": None,
+            "otp_provider": None,
             "otp_sent_at": None,
             "otp_verified": False,
             "otp_verified_at": None,
