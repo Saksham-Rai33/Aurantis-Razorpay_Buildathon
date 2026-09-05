@@ -75,6 +75,10 @@ def generate_demo_orders(n=50, seed=42):
             "delivered_at": None,
         })
 
+    # the highest-risk order is always shown first across the dashboard and
+    # delivery queue (both sort by risk_score descending) — use it for the demo
+    max(orders, key=lambda o: o["risk_score"])["customer_name"] = "Saksham Rai"
+
     return orders
 
 
