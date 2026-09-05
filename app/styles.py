@@ -166,6 +166,47 @@ div[data-baseweb="menu"] li {
     color: var(--text) !important;
 }
 
+/* newer Streamlit selectbox/multiselect: react-aria ComboBox, not BaseWeb */
+[data-testid="stSelectbox"] .react-aria-ComboBox > div,
+[data-testid="stMultiSelect"] .react-aria-ComboBox > div {
+    background-color: var(--card) !important;
+    border: 1px solid var(--card-border) !important;
+    border-radius: 10px !important;
+}
+
+[data-testid="stSelectbox"] .react-aria-ComboBox input,
+[data-testid="stMultiSelect"] .react-aria-ComboBox input {
+    color: var(--text) !important;
+    background: transparent !important;
+}
+
+[data-testid="stSelectbox"] .react-aria-ComboBox button,
+[data-testid="stMultiSelect"] .react-aria-ComboBox button {
+    color: var(--text-muted) !important;
+}
+
+/* the option popover is portaled to <body>, so target by role, not ancestry */
+body > div:has([role="listbox"]) {
+    background-color: var(--card) !important;
+    border: 1px solid var(--card-border) !important;
+    border-radius: 10px !important;
+}
+
+[role="listbox"] {
+    background-color: var(--card) !important;
+}
+
+[role="option"] {
+    color: var(--text) !important;
+    background-color: transparent !important;
+}
+
+[role="option"][aria-selected="true"],
+[role="option"][data-focused="true"],
+[role="option"]:hover {
+    background-color: rgba(108, 99, 255, 0.18) !important;
+}
+
 [data-testid="stSlider"] [data-baseweb="slider"] > div > div {
     background: var(--card-border) !important;
 }
