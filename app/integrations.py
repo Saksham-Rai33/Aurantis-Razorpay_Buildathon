@@ -21,7 +21,17 @@ DOCUSIGN_INTEGRATION_KEY = _get_config("DOCUSIGN_INTEGRATION_KEY")
 DOCUSIGN_USER_ID = _get_config("DOCUSIGN_USER_ID")
 DOCUSIGN_ACCOUNT_ID = _get_config("DOCUSIGN_ACCOUNT_ID")
 DOCUSIGN_PRIVATE_KEY_PATH = _get_config("DOCUSIGN_PRIVATE_KEY_PATH")
+# hosted environments can't ship a local .pem file — allow the raw PEM text
+# itself to be passed as a secret instead of a path
+DOCUSIGN_PRIVATE_KEY = _get_config("DOCUSIGN_PRIVATE_KEY")
 DOCUSIGN_AUTH_SERVER = _get_config("DOCUSIGN_AUTH_SERVER", "account-d.docusign.com")
+
+
+def _read_docusign_private_key():
+    if DOCUSIGN_PRIVATE_KEY:
+        return DOCUSIGN_PRIVATE_KEY.encode("utf-8")
+    with open(DOCUSIGN_PRIVATE_KEY_PATH, "rb") as key_file:
+        return key_file.read()
 
 
 def is_twilio_configured():
@@ -33,13 +43,8 @@ def is_verify_configured():
 
 
 def is_docusign_configured():
-    return bool(
-        DOCUSIGN_INTEGRATION_KEY
-        and DOCUSIGN_USER_ID
-        and DOCUSIGN_ACCOUNT_ID
-        and DOCUSIGN_PRIVATE_KEY_PATH
-        and os.path.exists(DOCUSIGN_PRIVATE_KEY_PATH)
-    )
+    has_key = DOCUSIGN_PRIVATE_KEY or (DOCUSIGN_PRIVATE_KEY_PATH and os.path.exists(DOCUSIGN_PRIVATE_KEY_PATH))
+    return bool(DOCUSIGN_INTEGRATION_KEY and DOCUSIGN_USER_ID and DOCUSIGN_ACCOUNT_ID and has_key)
 
 
 def _get_docusign_api_client():
@@ -47,8 +52,7 @@ def _get_docusign_api_client():
     to the correct account base URI (sandbox base URIs vary by account)."""
     from docusign_esign import ApiClient
 
-    with open(DOCUSIGN_PRIVATE_KEY_PATH, "rb") as key_file:
-        private_key_bytes = key_file.read()
+    private_key_bytes = _read_docusign_private_key()
 
     api_client = ApiClient()
     api_client.set_base_path(f"https://{DOCUSIGN_AUTH_SERVER}")

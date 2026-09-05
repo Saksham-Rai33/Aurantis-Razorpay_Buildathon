@@ -6,6 +6,7 @@ models/*.pkl
 models/*.joblib
 *.pkl
 *.joblib
+!results/model.pkl
 
 
 __pycache__/
@@ -28,4 +29,3 @@ Thumbs.db
 
 
 .ipynb_checkpoints/
-results/model.pkl

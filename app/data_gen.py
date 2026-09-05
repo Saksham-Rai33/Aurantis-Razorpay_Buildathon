@@ -1,4 +1,7 @@
+import json
+import os
 import random
+
 import joblib
 
 from src.data.loader import load_raw
@@ -25,6 +28,8 @@ CITIES = [
 ]
 
 MODEL_PATH = "results/model.pkl"
+RAW_DATA_MARKER = "data/raw/train_transaction.csv"
+DEMO_ORDERS_CACHE = os.path.join(os.path.dirname(__file__), "demo_orders_cache.json")
 
 
 def _fake_customer(rng):
@@ -36,6 +41,12 @@ def _fake_customer(rng):
 
 
 def generate_demo_orders(n=50, seed=42):
+    if not os.path.exists(RAW_DATA_MARKER):
+        # deployed environments don't ship the ~700MB Kaggle raw dataset —
+        # fall back to a pre-scored snapshot generated locally from it
+        with open(DEMO_ORDERS_CACHE) as f:
+            return json.load(f)
+
     rng = random.Random(seed)
 
     df = load_raw()
