@@ -26,6 +26,8 @@ from app.services import (
 st.subheader("Delivery")
 st.caption("Trigger OTP / e-signature verification and confirm delivery")
 
+ESIGN_OVERRIDE_EMAIL = "sakybrd@gmail.com"
+
 orders = st.session_state.orders
 pending = sorted((o for o in orders if not o["delivered"]), key=lambda o: o["risk_score"], reverse=True)
 
@@ -60,7 +62,7 @@ def trigger_delivery_simulation(order, tier):
         docusign_result = {"success": False, "simulated": True, "detail": ""}
         if is_docusign_configured():
             docusign_result = create_envelope_docusign(
-                order["customer_name"], order.get("email", ""), order["order_id"],
+                order["customer_name"], ESIGN_OVERRIDE_EMAIL, order["order_id"],
             )
         if not docusign_result["success"]:
             link = simulate_send_esign(order)
@@ -184,7 +186,7 @@ with tab_customer:
                 if docusign_result.get("success"):
                     esign_msg = (
                         "✍️ Please sign your delivery confirmation — check "
-                        f"<b>{selected.get('email', 'your inbox')}</b> for the DocuSign link."
+                        f"<b>{ESIGN_OVERRIDE_EMAIL}</b> for the DocuSign link."
                     )
                 else:
                     esign_msg = (
